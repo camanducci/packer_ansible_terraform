@@ -1,0 +1,263 @@
+---
+- hosts: web
+  remote_user: maintuser
+  become: yes
+  vars:
+    wordpress_version: 5.4
+    wordpress_database: wordpress
+    wordpress_user: wordpress
+    wordpress_password: semsenha
+    wordpress_host: localhost
+    magento_database: magento_data
+    magento_user: magento
+    magento_password: semsenha
+    magento_host: localhost
+
+  pre_tasks:
+  - name: python mysql
+    package:
+      name: MySQL-python
+      state: present
+
+  tasks:
+
+  - name: repositorios selinux e firewalld
+    pause: 
+      seconds: 3
+
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+    notify: disable_firewalld
+
+  - name: instalando o repo do mariadb
+    shell: curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup |  bash
+
+  - name: Install epl
+    yum:
+      name: epel-release
+      state: present
+
+  - name:  EPEL file
+    ini_file:
+      path: /etc/yum.repos.d/epel.repo
+      section: epel
+      option: enabled
+      value: "1"
+      backup: true
+
+  - name: remi repo php
+    yum:
+      name: http://rpms.remirepo.net/enterprise/remi-release-7.rpm
+      state: present
+
+  - name: enable php72
+    command: yum-config-manager --enable remi-php72
+
+  - name: add nginx repos
+    yum_repository:
+      name: nginx
+      description: nginx repository
+      baseurl: http://nginx.org/packages/mainline/centos/7/$basearch/
+      gpgcheck: no
+      enabled: yes
+
+  - name: banco de dados 
+    pause: 
+      seconds: 3
+
+  - name: install mysql
+    yum:
+      name: ['MariaDB-server', 'MariaDB-client']
+      state: present
+    notify: restart_mysql
+
+  - name: Force all notified handlers to run at this point, not waiting for normal sync points
+    meta: flush_handlers
+
+  - name: base do wp
+    mysql_db:
+      name: "{{ wordpress_database }}"
+      state: present
+
+  - name: usuario do wp
+    mysql_user:
+      name: "{{ wordpress_user }}"
+      password: "{{ wordpress_password }}"
+      priv: "{{ wordpress_database }}.*:ALL"
+
+  - name: base do magento
+    mysql_db:
+      name: "{{ magento_database }}"
+      state: present
+
+  - name: usuario do magento
+    mysql_user:
+      name: "{{ magento_user }}"
+      password: "{{ magento_password }}"
+      priv: "{{ magento_database }}.*:ALL"
+
+  - name: usuarios e diretorios
+    pause: 
+      seconds: 3
+
+  - name: Add www-data
+    user:
+      name: www-data
+
+  - name: Criar os diretorios 
+    file:
+      path: "{{ item }}"
+      state: directory
+    with_items:
+      - /var/www/html/blog
+      - /var/www/html/loja
+      - /var/log/nginx/wordpress
+      - /var/log/nginx/magento
+      - /etc/nginx/sites-enabled
+      - /etc/php-fpm.d
+      - /var/log/php-fpm/wordpress
+      - /var/log/php-fpm/magento
+
+  - name: php composer e login no magento 
+    pause: 
+      seconds: 3
+
+  - name: php packages
+    yum:
+      name: ['php', 'php-fpm', 'php-soap', 'php-mysql', 'php-intl', 'php-xml', 'php-gd', 'php-mbstring', 'php-bcmath', 'php-zip']
+      state: present
+
+  - name: install unzip
+    yum:
+      name: unzip
+
+  - name: Download composer installer
+    get_url:
+      url: https://getcomposer.org/installer
+      dest: /tmp/composer-installer
+      mode: 0755
+
+  - name: Install composer using PHP
+    shell: php composer-installer
+    args:
+      chdir: /tmp/
+
+  - name: adicionar o composer ao /usr/bin path
+    shell: mv composer.phar /usr/bin/composer
+    args:
+      chdir: /tmp/
+
+  - name: login on magento repo
+    command: composer global config http-basic.repo.magento.com "{{ repo_api_key }}" "{{ repo_secret_key }}"
+
+  - name: magento e wordpress install
+    pause: 
+      seconds: 3
+
+  - name: install magento
+    composer:
+      command: create-project
+      arguments: --repository=https://repo.magento.com/ magento/project-community-edition magento
+      working_dir: /var/www/html/loja
+      prefer_dist: yes
+    async: 300
+
+  - name: permissoes magento 
+    shell: chmod -R 0777 var/ pub/ generated/
+    args:
+      chdir: /var/www/html/loja/magento
+
+  - name: Download Wordpress zip file
+    get_url:
+      url: http://wordpress.org/wordpress-{{ wordpress_version }}.tar.gz
+      dest: /var/www/html/blog/
+
+  - name: Descompactando o wp
+    unarchive:
+      src: /var/www/html/blog/wordpress-{{ wordpress_version }}.tar.gz
+      dest: /var/www/html/blog/
+      remote_src: yes
+
+  - name: Wordpress config file
+    template:
+      src: wp/wp-config-sample.php.j2
+      dest: /var/www/html/blog/wordpress/wp-config.php
+
+  - name: nginx e php-fpm configs
+    pause: 
+      seconds: 3
+
+  - name: install nginx
+    yum:
+      name: nginx
+    notify: check_sintax
+
+  - name: nginx config
+    template:
+      src: nginx/nginx.conf
+      dest: /etc/nginx/nginx.conf
+    notify: check_sintax
+
+  - name: nginx wp config
+    template:
+      src: nginx/sites-enabled/wordpress.conf
+      dest: /etc/nginx/sites-enabled/wordpress.conf
+    notify: check_sintax
+
+  - name: nginx mag config
+    template:
+      src: nginx/sites-enabled/magento.conf
+      dest: /etc/nginx/sites-enabled/magento.conf
+    notify: check_sintax
+
+  - name: php-fpm config
+    template:
+      src: fpm/php-fpm.conf
+      dest: /etc/php-fpm.conf
+    notify: restart_phpfpm
+
+  - name: fpm files wordpress
+    template:
+      src: php-fpm/sample.conf.j2
+      dest: "/etc/php-fpm.d/{{ site }}.conf"
+    vars:
+      - {site: wordpress, port: 11000}
+    notify: restart_phpfpm
+
+  - name: fpm files magento
+    template:
+      src: php-fpm/sample.conf.j2
+      dest: "/etc/php-fpm.d/{{ site }}.conf"
+    vars:
+      - {site: magento, port: 10000}
+    notify: restart_phpfpm
+
+  handlers:
+
+  - name: check_sintax 
+    command: nginx -t
+    notify: restart_nginx
+
+  - name: restart_nginx
+    service:
+      name: nginx
+      enabled: yes
+      state: restarted
+  
+  - name: restart_phpfpm
+    service:
+      name: php-fpm
+      state: restarted
+
+  - name: restart_mysql
+    service:
+      name: mariadb
+      enabled: yes
+      state: restarted
+  
+  - name: disable_firewalld
+    service: 
+      name: firewalld
+      state: stopped
+      enabled: no
