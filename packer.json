@@ -1,0 +1,31 @@
+{
+  "variables": {
+    "ami_id": "ami-0022ebeda476ffd59",
+    "aws_region": "us-east-2",
+    "ssh_username": "maintuser",
+    "aws_vpc_id": "vpc-e3928a8b"
+  },
+
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "{{user `aws_region`}}",
+    "source_ami": "{{user `ami_id`}}",
+    "instance_type": "t2.micro",
+    "ssh_username": "maintuser",
+    "ami_name": "AceleraSp_Stevan",
+    "ssh_keypair_name": "stevan-acelerasp",
+    "ssh_prvivate_key_file": "~/.ssh/stevan-acelerasp.pem",
+    "vpc_id": "{{user `aws_vpc_id`}}"
+  }],
+
+  "provisioners": [
+    {
+      "type": "ansible",
+      "playbook_file": "./provisioners/ansible/mag_wp.yaml",
+      "user": "{{user `ssh_usrname`}}",
+      "ansible_env_vars": [
+        "ANSIBLE_HOST_KEY_CHECKING=False"
+      ]
+    }
+  ]
+}
