@@ -1,11 +1,4 @@
 {
-  "variables": {
-    "ami_id": "ami-0022ebeda476ffd59",
-    "aws_region": "us-east-2",
-    "ssh_username": "maintuser",
-    "aws_vpc_id": "vpc-e3928a8b"
-  },
-
   "builders": [{
     "type": "amazon-ebs",
     "region": "{{user `aws_region`}}",
