@@ -1,5 +1,5 @@
 ---
-- hosts: web
+- hosts: all
   remote_user: maintuser
   become: yes
   vars:
