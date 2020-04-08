@@ -14,3 +14,6 @@ data "aws_security_group" "acelera" {
   id = var.security_group_id
 }
 
+data "aws_route53_zone" "stevan" {
+  name         = "stevan.tk."
+}
