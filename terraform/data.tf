@@ -1,7 +1,7 @@
 data "aws_ami" "acelera" {
-  most_recent      = true
-  name_regex       = ".*-Stevan$"
-  owners           = ["self"]
+  most_recent = true
+  name_regex  = ".*-Stevan$"
+  owners      = ["self"]
 
   filter {
     name   = "name"
@@ -15,5 +15,5 @@ data "aws_security_group" "acelera" {
 }
 
 data "aws_route53_zone" "stevan" {
-  name         = "stevan.tk."
+  name = "stevan.tk."
 }
