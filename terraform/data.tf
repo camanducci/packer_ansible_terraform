@@ -1,26 +1,16 @@
 data "aws_ami" "acelera" {
-  executable_users = ["self"]
   most_recent      = true
-  name_regex       = "Stevan$"
+  name_regex       = ".*-Stevan$"
   owners           = ["self"]
 
   filter {
     name   = "name"
-    values = ["*Stevan"]
+    values = ["AceleraSp-Stevan"]
   }
 
-  filter {
-    name   = "root-device-type"
-    values = ["ebs"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
 }
 
-data "aws_security_group" "selected" {
+data "aws_security_group" "acelera" {
   id = var.security_group_id
 }
 
